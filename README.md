@@ -1,2 +1,2 @@
 # autoSyncNN
-An auto encoder architecture to audio signal synchronization
+An auto encoder architecture for synchronization of audio signals
