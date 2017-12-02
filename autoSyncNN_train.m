@@ -21,6 +21,7 @@ opts.prefetch = false ;
 opts.numEpochs = 300 ;
 opts.learningRate = 0.001 ;
 opts.weightDecay = 0.0005 ;
+opts.plotOutputs = false ;
 
 opts.solver = [] ;  % Empty array means use the default SGD solver
 [opts, varargin] = vl_argparse(opts, varargin) ;
@@ -377,6 +378,16 @@ for t=1:params.batchSize:numel(subset)
 
   if params.plotDiagnostics && ~isa(net, 'dagnn.DagNN') && mod(t-1, params.batchSize * 5) == 0
     net.plotDiagnostics(200) ;
+  end
+  
+  if params.plotOutputs 
+    switchFigure(3) ; clf ;
+    pred = net.getValue('prediction');
+    ref = net.getValue('nextSample');
+    
+    subplot(2,1,1); plot(pred(:,1,1,1)); hold on; plot(ref(:,1,1,1)); title('Network Output')
+    subplot(2,1,2); plot(pred(:,1,1,1) - ref(:,1,1,1)); title('Output error');
+    drawnow();
   end
 end
 

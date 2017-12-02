@@ -1,17 +1,15 @@
 clear;
 
-N = 512;
-nwin = 1;
+N = 128;
 nsigs = 2;
-OR = 4;
 init_discard = 1;
 nexpand = 10;
-maxDelay = 512;
+maxDelay = 64;
 downSampleRate = 2;
 
-mode = 'autotest'
+mode = 'REFTEST'
 datasetdir = '/media/pepeu/582D8A263EED4072/DATASETS/Bach10/audio/'
-medMat = sprintf('/media/pepeu/582D8A263EED4072/DATASETS/Bach10/autoSyncNN_AUTOTEST_N%d_NW%d.dat',N,nwin);
+medMat = sprintf('/media/pepeu/582D8A263EED4072/DATASETS/Bach10/autoSyncNN_%s_MD%d_NS%d_N%d.dat',mode,maxDelay,nsigs,N);
 
 %medmatfile = matfile(medMat,'Writable',true);
 
@@ -63,8 +61,8 @@ for xpan = 1:nexpand
                     
                     [adata, Fs] = audioread(filename);
                     adata = mean(adata',1);
-                    audiodata = [zeros(1,sample_delay) , adata(sample_delay:end)] ;
-                    save(matfilename, 'audiodata');
+                    audiodataD = [zeros(1,sample_delay) , adata(sample_delay:end)] ;
+                    save(matfilename, 'adata', 'audiodataD');
                 end
 
                 disp (['reading file ', filename]);
@@ -92,7 +90,7 @@ ac = 1;
 for xpan = 1:nexpand
     fprintf ('******************************************** XPAN %d *********************************************\n', xpan);
     varlist = fieldnames(data.(sprintf('exp%02d',1)));
-    for v = 1:size(varlist,1);
+    for v = 1:size(varlist,1)
         str = data.(sprintf('exp%02d',1)).(varlist{v});
 
         v2list = fieldnames(str.audio);
@@ -103,14 +101,19 @@ for xpan = 1:nexpand
         for st1=1:nfls
             for st2=st1+1:nfls
 
-                a1 = load(str.audio.(v2list{st1}).matfile);
-                a1 = downsample(a1.audiodata,downSampleRate);
-                a2 = load(str.audio.(v2list{st2}).matfile);
-                a2 = downsample(a2.audiodata,downSampleRate);
+                m1 = load(str.audio.(v2list{st1}).matfile);
+                m2 = load(str.audio.(v2list{st2}).matfile);
+                
+                a1 = downsample(m1.audiodataD,downSampleRate);
+                a2 = downsample(m2.audiodataD,downSampleRate);
+                n1 = downsample(m1.adata,downSampleRate);
+                n2 = downsample(m2.adata,downSampleRate);
+                
+                sm = n1 + n2;
                 
                 ref   = str.audio.(v2list{st2}).delay - str.audio.(v2list{st1}).delay;
                 
-                if strcmp(mode,'autotest')
+                if strcmp(mode,'AUTOTEST')
                     
                     a1 = a1(init_discard:end);
 
@@ -126,35 +129,40 @@ for xpan = 1:nexpand
                     end
                 end
                 
-                if strcmp(mode,'reftest')
-                    
-                    a1 = a1(init_discard:end);
-                    a2 = a2(init_discard:end);
-
-                    mb1 = vec2mat(a1,25);
-                    mb2 = vec2mat(a2,25);
-
-                    a1 = reshape(mb1(std(mb1,0,2)  >= 0.1 & std(mb2,0,2)  >= 0.1,:)',1,[]);
-                    a2 = reshape(mb2(std(mb1,0,2)  >= 0.1 & std(mb2,0,2)  >= 0.1,:)',1,[]);
-
-                end
+%                 % REMOVE SILENCE
+%                 if strcmp(mode,'REFTEST')
+%                     
+%                     a1 = a1(init_discard:end);
+%                     a2 = a2(init_discard:end);
+%                     sm = sm(init_discard:end);
+% 
+%                     mb1 = vec2mat(a1,25);
+%                     mb2 = vec2mat(a2,25);
+%                     mbs = vec2mat(sm,25);
+% 
+%                     a1 = reshape(mb1(std(mb1,0,2)  >= 0.1 & std(mb2,0,2)  >= 0.1,:)',1,[]);
+%                     a2 = reshape(mb2(std(mb1,0,2)  >= 0.1 & std(mb2,0,2)  >= 0.1,:)',1,[]);
+%                     sm = reshape(mb2(std(mb1,0,2)  >= 0.1 & std(mb2,0,2)  >= 0.1,:)',1,[]);
+%                 end
                 
                 a1mat = vec2mat(a1,N)';
                 a2mat = vec2mat(a2,N)';
+                smat  = vec2mat(sm,N);
                 
-                if min(size(a1mat,2),size(a2mat,2)) < nwin
-                    continue;
+                nwin = min(size(a1mat,2),size(a2mat,2));
+                
+                for ww = 1:nwin
+                    amat(:,1) = single(a1mat(:,ww));
+                    amat(:,2) = single(a2mat(:,ww));
+                    rmat(:,1) = single(smat(:,ww));
+                    
+                    fwrite(fileID,amat,'single');
+                    fwrite(fileID,rmat,'single');
+                    fwrite(fileID,int32(ref),'int32');
+                    
+                    ac = ac + 1;
                 end
                 
-                win = randi(min(size(a1mat,2),size(a2mat,2)), nwin,1);
-                
-                amat(:,:,1) = single(a2mat(:,win));
-                amat(:,:,2) = single(a1mat(:,win));
-                                
-                fwrite(fileID,amat,'single');
-                fwrite(fileID,int32(ref),'int32');
-                
-                ac = ac + 1;
             end
         end
     end
